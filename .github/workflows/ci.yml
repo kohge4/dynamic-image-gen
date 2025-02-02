@@ -1,0 +1,98 @@
+name: App and CDK CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  app-test:
+    name: app test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.23
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install dependencies
+        run: |
+          cd app
+          go mod tidy
+
+      - name: Run tests
+        run: |
+          cd app
+          go test ./... -v
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./
+        
+  cdk-test:
+    name: cdk test
+    runs-on: ubuntu-latest
+    env:
+      ECR_REGISTRY_NAME: "cdk-registry"
+      ECR_REPOSITORY_NAME: "cdk-repository"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Create .env file
+        run: |
+          echo "ECR_REGISTRY_NAME=cdk-registry" > cdk/.env
+          echo "ECR_REPOSITORY_NAME=cdk-repository" >> cdk/.env
+          echo "CI=true" >> cdk/.env
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.23
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install dependencies
+        run: |
+          cd cdk
+          go mod tidy
+
+      - name: Run tests
+        run: |
+          cd cdk
+          go test ./... -v
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./
